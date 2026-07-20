@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Movie Night - Watch Together</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <!-- HOME SCREEN -->
+  <div id="home-screen" class="screen active">
+    <div class="home-container">
+      <div class="logo">
+        <span class="logo-icon">🎬</span>
+        <h1>Movie Night</h1>
+        <p class="tagline">Watch movies with friends, synced in real-time</p>
+        <div id="conn-status" style="margin-top:8px;padding:6px 12px;border-radius:8px;font-size:13px;display:inline-block;background:#555;color:#fff;">Connecting...</div>
+      </div>
+
+      <div class="avatar-picker">
+        <p>Choose your avatar</p>
+        <div class="avatars">
+          <button class="avatar-btn selected" data-avatar="🍿">🍿</button>
+          <button class="avatar-btn" data-avatar="🎭">🎭</button>
+          <button class="avatar-btn" data-avatar="👾">👾</button>
+          <button class="avatar-btn" data-avatar="🦊">🦊</button>
+          <button class="avatar-btn" data-avatar="🐱">🐱</button>
+          <button class="avatar-btn" data-avatar="🍕">🍕</button>
+          <button class="avatar-btn" data-avatar="🎸">🎸</button>
+          <button class="avatar-btn" data-avatar="🚀">🚀</button>
+        </div>
+      </div>
+
+      <div class="actions">
+        <div class="action-card">
+          <h2>Create a Room</h2>
+          <p>Start a new watch party and invite friends</p>
+          <input type="text" id="create-username" placeholder="Your name" maxlength="20">
+          <button id="create-btn" class="btn btn-primary">Create Room</button>
+        </div>
+
+        <div class="divider"><span>OR</span></div>
+
+        <div class="action-card">
+          <h2>Join a Room</h2>
+          <p>Enter a room code to join friends</p>
+          <input type="text" id="join-username" placeholder="Your name" maxlength="20">
+          <input type="text" id="room-code" placeholder="Room code (e.g. ABC123)" maxlength="6" style="text-transform:uppercase">
+          <button id="join-btn" class="btn btn-secondary">Join Room</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ROOM SCREEN -->
+  <div id="room-screen" class="screen">
+    <div class="room-layout">
+      <!-- TOP BAR -->
+      <div class="room-header">
+        <div class="room-header-left">
+          <span class="logo-icon-sm">🎬</span>
+          <span class="room-title">Movie Night</span>
+        </div>
+        <div class="room-code-display">
+          Room: <strong id="display-room-code"></strong>
+          <button id="copy-code-btn" class="btn-icon" title="Copy invite link">📋</button>
+        </div>
+        <button id="leave-btn" class="btn btn-danger btn-sm">Leave</button>
+      </div>
+
+      <!-- MAIN CONTENT -->
+      <div class="room-main">
+        <!-- VIDEO AREA -->
+        <div class="video-section">
+          <!-- VIDEO SETTER -->
+          <div id="video-setter" class="video-setter">
+            <h2>🎬 Pick something to watch</h2>
+
+            <div class="video-tabs">
+              <button class="tab-btn active" data-tab="upload">Upload File</button>
+              <button class="tab-btn" data-tab="gdrive">Google Drive</button>
+              <button class="tab-btn" data-tab="url">Paste URL</button>
+            </div>
+
+            <!-- UPLOAD TAB -->
+            <div id="tab-upload" class="tab-content active">
+              <div class="upload-zone" id="upload-zone">
+                <span class="upload-icon">📁</span>
+                <p>Drag & drop your movie here</p>
+                <p class="hint">or click to browse</p>
+                <input type="file" id="file-input" accept="video/*" hidden>
+              </div>
+              <div id="upload-progress" class="upload-progress" style="display:none">
+                <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
+                <span id="progress-text">Uploading... 0%</span>
+              </div>
+              <div id="upload-filename" class="upload-filename" style="display:none"></div>
+            </div>
+
+            <!-- GOOGLE DRIVE TAB -->
+            <div id="tab-gdrive" class="tab-content">
+              <div class="gdrive-info">
+                <span class="gdrive-icon">☁️</span>
+                <h3>Play from Google Drive</h3>
+                <p>Paste a Google Drive sharing link and play it directly — no upload needed!</p>
+                <ol class="gdrive-steps">
+                  <li>Right-click your video in Google Drive</li>
+                  <li>Click <strong>Share</strong> → <strong>General access</strong> → <strong>Anyone with the link</strong></li>
+                  <li>Copy the link and paste it below</li>
+                </ol>
+              </div>
+              <div class="video-input-group">
+                <input type="text" id="gdrive-url-input" placeholder="Paste Google Drive link here...">
+                <button id="load-gdrive-btn" class="btn btn-primary">Play</button>
+              </div>
+              <p class="hint">Supports Google Drive video files (MP4, WebM, MKV, AVI, MOV)</p>
+            </div>
+
+            <!-- URL TAB -->
+            <div id="tab-url" class="tab-content">
+              <div class="video-input-group">
+                <select id="video-type">
+                  <option value="url">Direct Video URL</option>
+                  <option value="youtube">YouTube Link</option>
+                </select>
+                <input type="text" id="video-url-input" placeholder="Paste video URL here...">
+                <button id="load-video-btn" class="btn btn-primary">Load</button>
+              </div>
+            </div>
+
+            <p class="hint">Supports MP4, WebM, MKV, and other video formats</p>
+          </div>
+
+          <!-- VIDEO PLAYER -->
+          <div id="video-player-container" class="video-player-container" style="display:none">
+            <video id="video-player" controls playsinline></video>
+            <div id="youtube-player" style="display:none"></div>
+          </div>
+
+          <!-- CONTROLS -->
+          <div id="playback-controls" class="playback-controls" style="display:none">
+            <button id="sync-btn" class="btn btn-primary btn-sm" title="Sync everyone to your position">
+              🔄 Sync All
+            </button>
+            <div class="time-display" id="time-display">0:00 / 0:00</div>
+            <div id="sync-indicator" class="sync-indicator" style="display:none">✓ Synced</div>
+            <div class="call-controls">
+              <button id="cam-toggle" class="btn-call" title="Toggle Camera">📷</button>
+              <button id="mic-toggle" class="btn-call" title="Toggle Mic">🎤</button>
+            </div>
+          </div>
+
+          <!-- VIDEO CALL OVERLAY -->
+          <div id="video-call-overlay" class="video-call-overlay">
+            <div id="remote-videos" class="remote-videos"></div>
+            <div id="local-video-wrap" class="local-video-wrap" style="display:none">
+              <video id="local-video" autoplay muted playsinline></video>
+              <span class="local-video-label">You</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- SIDEBAR -->
+        <div class="sidebar">
+          <!-- PARTICIPANTS -->
+          <div class="sidebar-section">
+            <h3>👥 Watching (<span id="participant-count">0</span>)</h3>
+            <ul id="participants-list" class="participants-list"></ul>
+          </div>
+
+          <!-- CHAT -->
+          <div class="sidebar-section chat-section">
+            <h3>💬 Chat</h3>
+            <div id="chat-messages" class="chat-messages"></div>
+            <div class="chat-input">
+              <input type="text" id="chat-input" placeholder="Type a message..." maxlength="500">
+              <button id="send-chat-btn" class="btn btn-primary btn-sm">Send</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TOAST -->
+  <div id="toast" class="toast"></div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="app.js?v=2"></script>
+</body>
+</html>
