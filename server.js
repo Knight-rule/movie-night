@@ -54,9 +54,13 @@ const ALLOWED_ORIGINS = [
   'https://127.0.0.1:' + PORT,
   'https://' + lanIp + ':' + PORT,
 ];
-// Dynamically allow LAN IPs from .env
+// Dynamically allow extra origins from .env (comma-separated)
 if (process.env.ALLOWED_ORIGINS) {
   process.env.ALLOWED_ORIGINS.split(',').forEach(o => ALLOWED_ORIGINS.push(o.trim()));
+}
+// Allow Render-provided hostname
+if (process.env.RENDER_EXTERNAL_URL) {
+  ALLOWED_ORIGINS.push(process.env.RENDER_EXTERNAL_URL);
 }
 
 console.log('Allowed CORS origins:', ALLOWED_ORIGINS);
