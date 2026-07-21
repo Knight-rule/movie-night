@@ -770,7 +770,7 @@ io.on('connection', (socket) => {
 const isHttps = fs.existsSync(keyFile) && fs.existsSync(certFile);
 const protocol = isHttps ? 'https' : 'http';
 
-server.listen(PORT, () => {
+server.listen(PORT, '0.0.0.0', () => {
   console.log(`Movie Night server running:`);
   console.log(`  Local:    ${protocol}://localhost:${PORT}`);
   console.log(`  Network:  ${protocol}://${lanIp}:${PORT}`);
