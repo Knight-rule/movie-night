@@ -205,6 +205,176 @@ h1 {
 }
 
 /* ─────────────────────────────────────────────────
+   Tabs
+   ───────────────────────────────────────────────── */
+
+.video-tabs {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.tab-btn {
+  padding: 0.6rem 1.25rem;
+  border: 1px solid var(--border);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  border-radius: 8px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.tab-btn:hover {
+  border-color: var(--accent);
+  color: var(--text-primary);
+}
+
+.tab-btn.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
+}
+
+.tab-content {
+  display: none;
+  width: 100%;
+  max-width: 500px;
+}
+
+.tab-content.active {
+  display: block;
+}
+
+/* ─────────────────────────────────────────────────
+   Upload Zone
+   ───────────────────────────────────────────────── */
+
+.upload-zone {
+  border: 2px dashed var(--border);
+  border-radius: 12px;
+  padding: 3rem 2rem;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  background: var(--bg-secondary);
+}
+
+.upload-zone:hover {
+  border-color: var(--accent);
+  background: rgba(233, 69, 96, 0.05);
+}
+
+.upload-zone.dragover {
+  border-color: var(--accent);
+  background: rgba(233, 69, 96, 0.1);
+  transform: scale(1.02);
+}
+
+.upload-icon {
+  font-size: 3rem;
+  display: block;
+  margin-bottom: 0.75rem;
+}
+
+.upload-progress {
+  margin-top: 1rem;
+  text-align: center;
+}
+
+.progress-bar {
+  width: 100%;
+  height: 6px;
+  background: var(--bg-secondary);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-bottom: 0.5rem;
+}
+
+.progress-fill {
+  height: 100%;
+  background: var(--accent);
+  width: 0%;
+  transition: width 0.2s;
+}
+
+.upload-filename {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  padding: 0.5rem 1rem;
+  background: var(--bg-secondary);
+  border-radius: 8px;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+}
+
+/* ─────────────────────────────────────────────────
+   Video Input Group
+   ───────────────────────────────────────────────── */
+
+.video-input-group {
+  display: flex;
+  gap: 0.5rem;
+  width: 100%;
+  max-width: 500px;
+}
+
+.video-input-group select,
+.video-input-group input {
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--border);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border-radius: 8px;
+  font-size: 1rem;
+}
+
+.video-input-group select {
+  min-width: 140px;
+}
+
+.video-input-group input {
+  flex: 1;
+}
+
+/* Google Drive info */
+.gdrive-info {
+  text-align: center;
+  margin-bottom: 1.5rem;
+}
+
+.gdrive-icon {
+  font-size: 2.5rem;
+  display: block;
+  margin-bottom: 0.5rem;
+}
+
+.gdrive-info h3 {
+  margin: 0 0 0.5rem 0;
+  color: var(--text-primary);
+}
+
+.gdrive-info p {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+.gdrive-steps {
+  text-align: left;
+  max-width: 400px;
+  margin: 1rem auto 0;
+  padding-left: 1.5rem;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+}
+
+.gdrive-steps li {
+  margin-bottom: 0.4rem;
+}
+
+/* ─────────────────────────────────────────────────
    Shared Components
    ───────────────────────────────────────────────── */
 
@@ -715,6 +885,12 @@ h1 {
 .chat-time {
   font-size: 0.75rem;
   color: var(--text-secondary);
+}
+
+.chat-text {
+  color: var(--text-primary);
+  line-height: 1.4;
+  word-break: break-word;
 }
 
 .chat-input {
