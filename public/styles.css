@@ -1,4 +1,16 @@
-* { margin: 0; padding: 0; box-sizing: border-box; }
+/* ═══════════════════════════════════════════════════
+   Movie Night — Styles
+   ═══════════════════════════════════════════════════ */
+
+/* ─────────────────────────────────────────────────
+   Reset & CSS Variables
+   ───────────────────────────────────────────────── */
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
 
 :root {
   --bg-primary: #0f0f0f;
@@ -10,21 +22,24 @@
   --text-secondary: #a0a0b0;
   --border: #2a2a4a;
   --success: #2ecc71;
+  --danger: #dc2626;
   --chat-bg: #1e1e3a;
 }
+
+/* ─────────────────────────────────────────────────
+   Base
+   ───────────────────────────────────────────────── */
 
 body {
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
   background: var(--bg-primary);
   color: var(--text-primary);
-  margin: 0;
-  padding: 0;
   height: 100vh;
   width: 100vw;
   overflow: hidden;
 }
 
-screen {
+.screen {
   position: absolute;
   top: 0;
   left: 0;
@@ -33,14 +48,16 @@ screen {
   display: none;
 }
 
-screen.active {
+.screen.active {
   display: flex;
 }
 
-/* HOME SCREEN */
+/* ─────────────────────────────────────────────────
+   Home Screen
+   ───────────────────────────────────────────────── */
+
 #home-screen {
   background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 100%);
-  display: flex;
   align-items: center;
   justify-content: center;
 }
@@ -56,6 +73,7 @@ screen.active {
   height: 100vh;
 }
 
+/* Logo */
 .logo {
   text-align: center;
   margin-bottom: 3rem;
@@ -81,12 +99,24 @@ h1 {
   color: var(--text-primary);
 }
 
-tagline {
+.tagline {
   color: var(--accent);
   font-size: 1rem;
   opacity: 0.9;
 }
 
+.conn-status {
+  font-size: 0.85rem;
+  padding: 6px 12px;
+  border-radius: 6px;
+  transition: all 0.3s;
+  margin-top: 8px;
+  display: inline-block;
+  background: #555;
+  color: #fff;
+}
+
+/* Avatar picker */
 .avatars {
   display: flex;
   gap: 0.5rem;
@@ -121,7 +151,8 @@ tagline {
   color: white;
 }
 
-actions {
+/* Actions (Create / Join) */
+.actions {
   display: flex;
   gap: 2rem;
   width: 100%;
@@ -129,7 +160,7 @@ actions {
   margin-top: 3rem;
 }
 
-action-card {
+.action-card {
   flex: 1;
   background: var(--bg-card);
   border: 1px solid var(--border);
@@ -140,23 +171,42 @@ action-card {
   overflow: hidden;
 }
 
-action-card:hover {
+.action-card:hover {
   border-color: var(--accent);
   transform: translateY(-2px);
   box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
 }
 
-action-card h2 {
+.action-card h2 {
   margin: 0 0 1rem 0;
   font-size: 1.5rem;
   color: var(--text-primary);
 }
 
-action-card p {
+.action-card p {
   margin: 0 0 1.5rem 0;
   color: var(--text-secondary);
   font-size: 0.95rem;
 }
+
+.divider {
+  display: flex;
+  align-items: center;
+  margin: 1.5rem 0;
+  color: var(--text-secondary);
+}
+
+.divider::before,
+.divider::after {
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+  margin: 0 1rem;
+}
+
+/* ─────────────────────────────────────────────────
+   Shared Components
+   ───────────────────────────────────────────────── */
 
 .input {
   width: 100%;
@@ -219,7 +269,7 @@ action-card p {
 }
 
 .btn-danger:hover {
-  background: #dc2626;
+  background: #b91c1c;
 }
 
 .btn-sm {
@@ -247,21 +297,10 @@ action-card p {
   border-color: var(--accent);
 }
 
-.divider {
-  display: flex;
-  align-items: center;
-  margin: 1.5rem 0;
-  color: var(--text-secondary);
-}
+/* ─────────────────────────────────────────────────
+   Room Screen
+   ───────────────────────────────────────────────── */
 
-.divider::before, .divider::after {
-  flex: 1;
-  height: 1px;
-  background: var(--border);
-  margin: 0 1rem;
-}
-
-/* ROOM SCREEN */
 #room-screen {
   background: var(--bg-primary);
 }
@@ -272,6 +311,7 @@ action-card p {
   flex-direction: column;
 }
 
+/* Room header */
 .room-header {
   height: 60px;
   background: var(--bg-card);
@@ -309,6 +349,7 @@ action-card p {
   font-size: 1.1rem;
 }
 
+/* Room main layout */
 .room-main {
   flex: 1;
   display: flex;
@@ -316,6 +357,10 @@ action-card p {
   padding: 2rem;
   height: calc(100vh - 60px);
 }
+
+/* ─────────────────────────────────────────────────
+   Video Section
+   ───────────────────────────────────────────────── */
 
 .video-section {
   flex: 1;
@@ -325,6 +370,7 @@ action-card p {
   position: relative;
 }
 
+/* Video picker */
 .video-setter {
   flex: 1;
   display: flex;
@@ -352,6 +398,7 @@ action-card p {
   opacity: 0.7;
 }
 
+/* Video player */
 .video-player-container {
   flex: 1;
   min-height: 300px;
@@ -382,6 +429,7 @@ action-card p {
   border: none;
 }
 
+/* Playback controls */
 .playback-controls {
   height: 60px;
   background: var(--bg-card);
@@ -409,15 +457,9 @@ action-card p {
   font-weight: 500;
 }
 
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.6; }
-}
-
-@keyframes fadeSync {
-  from { opacity: 1; transform: translateY(0); }
-  to { opacity: 0; transform: translateY(-10px); }
-}
+/* ─────────────────────────────────────────────────
+   Video Call Overlay
+   ───────────────────────────────────────────────── */
 
 .video-call-overlay {
   position: absolute;
@@ -465,7 +507,7 @@ action-card p {
   left: 6px;
   font-size: 11px;
   color: white;
-  background: rgba(0,0,0,0.6);
+  background: rgba(0, 0, 0, 0.6);
   padding: 2px 6px;
   border-radius: 4px;
 }
@@ -494,7 +536,7 @@ action-card p {
   left: 6px;
   font-size: 11px;
   color: white;
-  background: rgba(0,0,0,0.6);
+  background: rgba(0, 0, 0, 0.6);
   padding: 2px 6px;
   border-radius: 4px;
 }
@@ -546,7 +588,10 @@ action-card p {
   background: var(--bg-card);
 }
 
-/* SIDEBAR */
+/* ─────────────────────────────────────────────────
+   Sidebar (Participants + Chat)
+   ───────────────────────────────────────────────── */
+
 .sidebar {
   width: 320px;
   background: var(--bg-card);
@@ -567,6 +612,7 @@ action-card p {
   opacity: 0.9;
 }
 
+/* Participants */
 .participants-list {
   list-style: none;
   padding: 0;
@@ -619,6 +665,7 @@ action-card p {
   letter-spacing: 0.5px;
 }
 
+/* Chat */
 .chat-section {
   flex: 1;
   display: flex;
@@ -685,6 +732,10 @@ action-card p {
   padding: 0.6rem 1rem;
 }
 
+/* ─────────────────────────────────────────────────
+   Toast
+   ───────────────────────────────────────────────── */
+
 .toast {
   position: fixed;
   bottom: 2rem;
@@ -708,20 +759,42 @@ action-card p {
   opacity: 1;
 }
 
-#conn-status {
-  font-size: 0.85rem;
-  padding: 6px 12px;
-  border-radius: 6px;
-  transition: all 0.3s;
-  margin-top: 8px;
+/* ─────────────────────────────────────────────────
+   Animations
+   ───────────────────────────────────────────────── */
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
 }
 
+@keyframes fadeSync {
+  from { opacity: 1; transform: translateY(0); }
+  to { opacity: 0; transform: translateY(-10px); }
+}
+
+/* ─────────────────────────────────────────────────
+   Responsive
+   ───────────────────────────────────────────────── */
+
 @media (max-width: 1200px) {
-  .sidebar { width: 280px; }
+  .sidebar {
+    width: 280px;
+  }
 }
 
 @media (max-width: 768px) {
-  .room-main { flex-direction: column; padding: 1rem; }
-  .sidebar { width: 100%; height: 300px; }
-  .video-call-overlay { bottom: 100px; }
+  .room-main {
+    flex-direction: column;
+    padding: 1rem;
+  }
+
+  .sidebar {
+    width: 100%;
+    height: 300px;
+  }
+
+  .video-call-overlay {
+    bottom: 100px;
+  }
 }

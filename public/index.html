@@ -3,20 +3,26 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Movie Night - Watch Together</title>
+  <title>Movie Night — Watch Together</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <!-- HOME SCREEN -->
+
+  <!-- ═══════════════════════════════════════════════
+       HOME SCREEN
+       ═══════════════════════════════════════════════ -->
   <div id="home-screen" class="screen active">
     <div class="home-container">
+
+      <!-- Logo -->
       <div class="logo">
         <span class="logo-icon">🎬</span>
         <h1>Movie Night</h1>
         <p class="tagline">Watch movies with friends, synced in real-time</p>
-        <div id="conn-status" style="margin-top:8px;padding:6px 12px;border-radius:8px;font-size:13px;display:inline-block;background:#555;color:#fff;">Connecting...</div>
+        <div id="conn-status" class="conn-status">Connecting...</div>
       </div>
 
+      <!-- Avatar picker -->
       <div class="avatar-picker">
         <p>Choose your avatar</p>
         <div class="avatars">
@@ -31,6 +37,7 @@
         </div>
       </div>
 
+      <!-- Create / Join actions -->
       <div class="actions">
         <div class="action-card">
           <h2>Create a Room</h2>
@@ -49,13 +56,17 @@
           <button id="join-btn" class="btn btn-secondary">Join Room</button>
         </div>
       </div>
+
     </div>
   </div>
 
-  <!-- ROOM SCREEN -->
+  <!-- ═══════════════════════════════════════════════
+       ROOM SCREEN
+       ═══════════════════════════════════════════════ -->
   <div id="room-screen" class="screen">
     <div class="room-layout">
-      <!-- TOP BAR -->
+
+      <!-- Top bar -->
       <div class="room-header">
         <div class="room-header-left">
           <span class="logo-icon-sm">🎬</span>
@@ -68,11 +79,13 @@
         <button id="leave-btn" class="btn btn-danger btn-sm">Leave</button>
       </div>
 
-      <!-- MAIN CONTENT -->
+      <!-- Main content: video + sidebar -->
       <div class="room-main">
-        <!-- VIDEO AREA -->
+
+        <!-- ── Video area ── -->
         <div class="video-section">
-          <!-- VIDEO SETTER -->
+
+          <!-- Video picker (shown before a video is loaded) -->
           <div id="video-setter" class="video-setter">
             <h2>🎬 Pick something to watch</h2>
 
@@ -82,7 +95,7 @@
               <button class="tab-btn" data-tab="url">Paste URL</button>
             </div>
 
-            <!-- UPLOAD TAB -->
+            <!-- Upload tab -->
             <div id="tab-upload" class="tab-content active">
               <div class="upload-zone" id="upload-zone">
                 <span class="upload-icon">📁</span>
@@ -97,7 +110,7 @@
               <div id="upload-filename" class="upload-filename" style="display:none"></div>
             </div>
 
-            <!-- GOOGLE DRIVE TAB -->
+            <!-- Google Drive tab -->
             <div id="tab-gdrive" class="tab-content">
               <div class="gdrive-info">
                 <span class="gdrive-icon">☁️</span>
@@ -116,7 +129,7 @@
               <p class="hint">Supports Google Drive video files (MP4, WebM, MKV, AVI, MOV)</p>
             </div>
 
-            <!-- URL TAB -->
+            <!-- URL tab -->
             <div id="tab-url" class="tab-content">
               <div class="video-input-group">
                 <select id="video-type">
@@ -131,13 +144,13 @@
             <p class="hint">Supports MP4, WebM, MKV, and other video formats</p>
           </div>
 
-          <!-- VIDEO PLAYER -->
+          <!-- Video player (hidden until a video is loaded) -->
           <div id="video-player-container" class="video-player-container" style="display:none">
             <video id="video-player" controls playsinline></video>
             <div id="youtube-player" style="display:none"></div>
           </div>
 
-          <!-- CONTROLS -->
+          <!-- Playback controls -->
           <div id="playback-controls" class="playback-controls" style="display:none">
             <button id="sync-btn" class="btn btn-primary btn-sm" title="Sync everyone to your position">
               🔄 Sync All
@@ -150,7 +163,7 @@
             </div>
           </div>
 
-          <!-- VIDEO CALL OVERLAY -->
+          <!-- Video call overlay -->
           <div id="video-call-overlay" class="video-call-overlay">
             <div id="remote-videos" class="remote-videos"></div>
             <div id="local-video-wrap" class="local-video-wrap" style="display:none">
@@ -158,17 +171,17 @@
               <span class="local-video-label">You</span>
             </div>
           </div>
+
         </div>
 
-        <!-- SIDEBAR -->
+        <!-- ── Sidebar: participants + chat ── -->
         <div class="sidebar">
-          <!-- PARTICIPANTS -->
+
           <div class="sidebar-section">
             <h3>👥 Watching (<span id="participant-count">0</span>)</h3>
             <ul id="participants-list" class="participants-list"></ul>
           </div>
 
-          <!-- CHAT -->
           <div class="sidebar-section chat-section">
             <h3>💬 Chat</h3>
             <div id="chat-messages" class="chat-messages"></div>
@@ -177,15 +190,18 @@
               <button id="send-chat-btn" class="btn btn-primary btn-sm">Send</button>
             </div>
           </div>
+
         </div>
+
       </div>
+
     </div>
   </div>
 
-  <!-- TOAST -->
+  <!-- Toast notification -->
   <div id="toast" class="toast"></div>
 
   <script src="/socket.io/socket.io.js"></script>
-  <script src="app.js?v=2"></script>
+  <script src="app.js?v=3"></script>
 </body>
 </html>

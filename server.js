@@ -1,4 +1,5 @@
 require('dotenv').config();
+
 const express = require('express');
 const http = require('http');
 const https = require('https');
@@ -10,31 +11,41 @@ const fs = require('fs');
 const { URL } = require('url');
 const os = require('os');
 
-const app = express();
+// ─────────────────────────────────────────────────────
+// Configuration
+// ─────────────────────────────────────────────────────
 
-// ===== HTTPS SUPPORT =====
-const certPath = path.join(__dirname, 'certs');
-const keyFile = path.join(certPath, 'key.pem');
-const certFile = path.join(certPath, 'cert.pem');
-let server;
+const PORT = process.env.PORT || 4000;
+const MAX_ROOMS = 100;
+const MAX_PARTICIPANTS_PER_ROOM = 10;
+const MAX_FILE_SIZE = 2 * 1024 * 1024 * 1024; // 2GB
+const MAX_STORAGE_BYTES = 20 * 1024 * 1024 * 1024; // 20GB
+const CHAT_HISTORY_LIMIT = 200;
+const RATE_LIMIT_CLEANUP_INTERVAL = 300_000; // 5 minutes
 
-if (fs.existsSync(keyFile) && fs.existsSync(certFile)) {
-  const httpsOptions = {
-    key: fs.readFileSync(keyFile),
-    cert: fs.readFileSync(certFile),
-  };
-  server = https.createServer(httpsOptions, app);
-  console.log('HTTPS enabled');
-} else {
-  server = http.createServer(app);
-  console.log('HTTP only (no certs found — run: node generate-cert.js)');
+const VIDEO_EXTENSIONS = /mp4|webm|ogg|mkv|avi|mov/;
+
+const PROXY_ALLOWED_HOSTS = [
+  'drive.google.com',
+  'drive.usercontent.google.com',
+  'docs.google.com',
+  'example.com',
+  'sample-videos.com',
+];
+
+if (process.env.PROXY_ALLOWED_HOSTS) {
+  process.env.PROXY_ALLOWED_HOSTS
+    .split(',')
+    .forEach(h => PROXY_ALLOWED_HOSTS.push(h.trim()));
 }
 
-// ===== SECURITY: Restrict CORS to local network =====
+// ─────────────────────────────────────────────────────
+// Detect LAN IP and build CORS allowlist
+// ─────────────────────────────────────────────────────
+
 function detectLanIp() {
-  const interfaces = os.networkInterfaces();
-  for (const name of Object.keys(interfaces)) {
-    for (const iface of interfaces[name]) {
+  for (const interfaces of Object.values(os.networkInterfaces())) {
+    for (const iface of interfaces) {
       if (iface.family === 'IPv4' && !iface.internal) {
         return iface.address;
       }
@@ -44,47 +55,73 @@ function detectLanIp() {
 }
 
 const lanIp = detectLanIp();
-const PORT = process.env.PORT || 4000;
 
 const ALLOWED_ORIGINS = [
-  'http://localhost:' + PORT,
-  'http://127.0.0.1:' + PORT,
-  'http://' + lanIp + ':' + PORT,
-  'https://localhost:' + PORT,
-  'https://127.0.0.1:' + PORT,
-  'https://' + lanIp + ':' + PORT,
+  `http://localhost:${PORT}`,
+  `http://127.0.0.1:${PORT}`,
+  `http://${lanIp}:${PORT}`,
+  `https://localhost:${PORT}`,
+  `https://127.0.0.1:${PORT}`,
+  `https://${lanIp}:${PORT}`,
 ];
-// Dynamically allow extra origins from .env (comma-separated)
+
 if (process.env.ALLOWED_ORIGINS) {
-  process.env.ALLOWED_ORIGINS.split(',').forEach(o => ALLOWED_ORIGINS.push(o.trim()));
+  process.env.ALLOWED_ORIGINS
+    .split(',')
+    .forEach(o => ALLOWED_ORIGINS.push(o.trim()));
 }
-// Allow Render-provided hostname
+
 if (process.env.RENDER_EXTERNAL_URL) {
   ALLOWED_ORIGINS.push(process.env.RENDER_EXTERNAL_URL);
 }
 
-console.log('Allowed CORS origins:', ALLOWED_ORIGINS);
+// ─────────────────────────────────────────────────────
+// Express + Socket.IO setup
+// ─────────────────────────────────────────────────────
+
+const app = express();
+
+const certPath = path.join(__dirname, 'certs');
+const keyFile = path.join(certPath, 'key.pem');
+const certFile = path.join(certPath, 'cert.pem');
+
+function createServer() {
+  const certsExist = fs.existsSync(keyFile) && fs.existsSync(certFile);
+  if (certsExist) {
+    const options = {
+      key: fs.readFileSync(keyFile),
+      cert: fs.readFileSync(certFile),
+    };
+    console.log('HTTPS enabled (local dev)');
+    return https.createServer(options, app);
+  }
+  console.log('HTTP only — no certs found (run: node generate-cert.js for local HTTPS)');
+  return http.createServer(app);
+}
+
+const server = createServer();
 
 const io = new Server(server, {
   cors: {
     origin: (origin, callback) => {
-      // Allow requests with no origin (mobile apps, server-to-server)
       if (!origin || ALLOWED_ORIGINS.some(o => origin.startsWith(o))) {
         callback(null, true);
       } else {
         console.warn('CORS blocked:', origin);
         callback(new Error('Not allowed by CORS'));
       }
-    }
+    },
   },
   pingInterval: 25000,
   pingTimeout: 30000,
 });
 
-// ===== SECURITY: Trust proxy (for rate limiting behind reverse proxy) =====
+// ─────────────────────────────────────────────────────
+// Middleware
+// ─────────────────────────────────────────────────────
+
 app.set('trust proxy', 1);
 
-// ===== SECURITY: Basic security headers =====
 app.use((req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Frame-Options', 'DENY');
@@ -93,39 +130,36 @@ app.use((req, res, next) => {
   next();
 });
 
-// ===== SECURITY: SSRF protection — allowed proxy domains =====
-const PROXY_ALLOWED_HOSTS = [
-  'drive.google.com',
-  'drive.usercontent.google.com',
-  'docs.google.com',
-  'example.com',
-  'sample-videos.com',
-];
-if (process.env.PROXY_ALLOWED_HOSTS) {
-  process.env.PROXY_ALLOWED_HOSTS.split(',').forEach(h => PROXY_ALLOWED_HOSTS.push(h.trim()));
-}
+// ─────────────────────────────────────────────────────
+// Rate limiting (in-memory)
+// ─────────────────────────────────────────────────────
 
-// ===== SECURITY: Rate limiting (simple in-memory) =====
 const rateLimits = new Map();
-function checkRateLimit(key, maxRequests = 30, windowMs = 60000) {
+
+function checkRateLimit(key, maxRequests = 30, windowMs = 60_000) {
   const now = Date.now();
   const entry = rateLimits.get(key) || { count: 0, resetAt: now + windowMs };
+
   if (now > entry.resetAt) {
     entry.count = 0;
     entry.resetAt = now + windowMs;
   }
+
   entry.count++;
   rateLimits.set(key, entry);
   return entry.count <= maxRequests;
 }
 
-// Cleanup rate limits every 5 minutes
 setInterval(() => {
   const now = Date.now();
   for (const [key, entry] of rateLimits) {
     if (now > entry.resetAt) rateLimits.delete(key);
   }
-}, 300000);
+}, RATE_LIMIT_CLEANUP_INTERVAL);
+
+// ─────────────────────────────────────────────────────
+// File uploads
+// ─────────────────────────────────────────────────────
 
 const uploadsDir = path.join(__dirname, 'uploads');
 if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir);
@@ -135,29 +169,27 @@ const storage = multer.diskStorage({
   filename: (req, file, cb) => {
     const ext = path.extname(file.originalname);
     cb(null, `${Date.now()}-${uuidv4().slice(0, 8)}${ext}`);
-  }
+  },
 });
 
 const upload = multer({
   storage,
-  limits: { fileSize: 2 * 1024 * 1024 * 1024 }, // SECURITY: Reduced from 10GB to 2GB
+  limits: { fileSize: MAX_FILE_SIZE },
   fileFilter: (req, file, cb) => {
-    const allowed = /mp4|webm|ogg|mkv|avi|mov/;
     const ext = path.extname(file.originalname).toLowerCase().replace('.', '');
-    if (allowed.test(ext)) cb(null, true);
+    if (VIDEO_EXTENSIONS.test(ext)) cb(null, true);
     else cb(new Error('Only video files are allowed'));
-  }
+  },
 });
 
-// ===== SECURITY: Storage cap — max 20GB total uploads =====
-const MAX_STORAGE_BYTES = 20 * 1024 * 1024 * 1024;
+// Storage cap check (cached for 10s)
 let cachedUploadsSize = 0;
 let lastSizeCheck = 0;
 
 async function getUploadsSize() {
-  // Cache for 10s to avoid blocking on every upload
   const now = Date.now();
-  if (now - lastSizeCheck < 10000) return cachedUploadsSize;
+  if (now - lastSizeCheck < 10_000) return cachedUploadsSize;
+
   try {
     const files = await fs.promises.readdir(uploadsDir);
     let total = 0;
@@ -168,18 +200,23 @@ async function getUploadsSize() {
     cachedUploadsSize = total;
     lastSizeCheck = now;
     return total;
-  } catch { return 0; }
+  } catch {
+    return 0;
+  }
 }
+
+// ─────────────────────────────────────────────────────
+// HTTP routes
+// ─────────────────────────────────────────────────────
 
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/uploads', express.static(uploadsDir));
 
+// Upload endpoint
 app.post('/upload', async (req, res, next) => {
-  // SECURITY: Rate limit uploads
-  if (!checkRateLimit(`upload:${req.ip}`, 5, 300000)) {
+  if (!checkRateLimit(`upload:${req.ip}`, 5, 300_000)) {
     return res.status(429).json({ error: 'Too many uploads. Try again later.' });
   }
-  // SECURITY: Check storage cap before upload
   if (await getUploadsSize() > MAX_STORAGE_BYTES) {
     return res.status(507).json({ error: 'Server storage full' });
   }
@@ -189,9 +226,9 @@ app.post('/upload', async (req, res, next) => {
   res.json({ url: `/uploads/${req.file.filename}`, filename: req.file.originalname });
 });
 
+// Video proxy endpoint
 app.get('/proxy', async (req, res) => {
-  // SECURITY: Rate limit
-  if (!checkRateLimit(`proxy:${req.ip}`, 20, 60000)) {
+  if (!checkRateLimit(`proxy:${req.ip}`, 20, 60_000)) {
     return res.status(429).json({ error: 'Too many requests' });
   }
 
@@ -205,17 +242,15 @@ app.get('/proxy', async (req, res) => {
     return res.status(400).json({ error: 'Invalid URL' });
   }
 
-  // SECURITY: SSRF protection — only allow HTTPS and known hosts
   if (parsed.protocol !== 'https:') {
     return res.status(400).json({ error: 'Only HTTPS URLs allowed' });
   }
+
   if (!PROXY_ALLOWED_HOSTS.some(h => parsed.hostname === h || parsed.hostname.endsWith('.' + h))) {
     return res.status(403).json({ error: 'Domain not allowed for proxy' });
   }
 
-  // SECURITY: Block internal/private IPs
-  const hostname = parsed.hostname;
-  if (/^(localhost|127\.|192\.168\.|10\.|172\.(1[6-9]|2\d|3[01])\.|169\.254\.|0\.)/.test(hostname)) {
+  if (/^(localhost|127\.|192\.168\.|10\.|172\.(1[6-9]|2\d|3[01])\.|169\.254\.|0\.)/.test(parsed.hostname)) {
     return res.status(403).json({ error: 'Internal URLs not allowed' });
   }
 
@@ -232,12 +267,12 @@ app.get('/proxy', async (req, res) => {
       return res.status(proxyRes.status).json({ error: `Upstream returned ${proxyRes.status}` });
     }
 
-    const contentType = proxyRes.headers.get('content-type') || 'video/mp4';
+    res.setHeader('Content-Type', proxyRes.headers.get('content-type') || 'video/mp4');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+
     const contentLength = proxyRes.headers.get('content-length');
     const contentRange = proxyRes.headers.get('content-range');
 
-    res.setHeader('Content-Type', contentType);
-    res.setHeader('Access-Control-Allow-Origin', '*');
     if (contentLength) res.setHeader('Content-Length', contentLength);
     if (contentRange) {
       res.setHeader('Content-Range', contentRange);
@@ -245,16 +280,13 @@ app.get('/proxy', async (req, res) => {
     }
 
     const reader = proxyRes.body.getReader();
-    const pump = async () => {
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) { res.end(); return; }
-        if (!res.write(value)) {
-          await new Promise(r => res.once('drain', r));
-        }
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) { res.end(); return; }
+      if (!res.write(value)) {
+        await new Promise(r => res.once('drain', r));
       }
-    };
-    await pump();
+    }
   } catch (err) {
     if (!res.headersSent) {
       res.status(502).json({ error: 'Failed to fetch video: ' + err.message });
@@ -262,9 +294,12 @@ app.get('/proxy', async (req, res) => {
   }
 });
 
-// ===== GOOGLE DRIVE PROXY =====
-const GDRIVE_CACHE_TTL = 3600000; // 1 hour
-const gdriveCache = new Map(); // fileId -> { url, expiresAt }
+// ─────────────────────────────────────────────────────
+// Google Drive integration
+// ─────────────────────────────────────────────────────
+
+const GDRIVE_CACHE_TTL = 3_600_000; // 1 hour
+const gdriveCache = new Map();
 
 function extractGDriveFileId(url) {
   const patterns = [
@@ -283,26 +318,30 @@ function extractGDriveFileId(url) {
 function isValidGDriveRedirect(urlStr) {
   try {
     const parsed = new URL(urlStr);
-    const allowed = [
-      'drive.google.com',
-      'drive.usercontent.google.com',
-      'docs.google.com',
-    ];
-    return allowed.some(host => parsed.hostname === host || parsed.hostname.endsWith('.' + host));
-  } catch { return false; }
+    return PROXY_ALLOWED_HOSTS.some(
+      host => parsed.hostname === host || parsed.hostname.endsWith('.' + host)
+    );
+  } catch {
+    return false;
+  }
 }
 
 function fetchGDriveConfirmedUrl(fileId) {
   return new Promise((resolve, reject) => {
+    if (!/^[a-zA-Z0-9_-]+$/.test(fileId)) {
+      return reject(new Error('Invalid file ID format'));
+    }
+
     const get = (url, redirects = 0) => {
       if (redirects > 10) return reject(new Error('Too many redirects'));
       if (!isValidGDriveRedirect(url)) {
         return reject(new Error('Redirect to non-Google Drive host blocked'));
       }
+
       https.get(url, {
         headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
       }, (resp) => {
-        if (resp.statusCode === 301 || resp.statusCode === 302 || resp.statusCode === 303) {
+        if ([301, 302, 303].includes(resp.statusCode)) {
           const next = resp.headers.location;
           resp.resume();
           const nextUrl = next.startsWith('http') ? next : new URL(next, url).href;
@@ -311,7 +350,6 @@ function fetchGDriveConfirmedUrl(fileId) {
 
         const ct = resp.headers['content-type'] || '';
         if (!ct.includes('text/html')) {
-          // Small file — direct video, no confirmation needed
           resp.resume();
           return resolve({ url, contentType: ct, contentLength: resp.headers['content-length'] });
         }
@@ -328,22 +366,21 @@ function fetchGDriveConfirmedUrl(fileId) {
       }).on('error', reject);
     };
 
-    // Validate fileId contains only expected characters
-    if (!/^[a-zA-Z0-9_-]+$/.test(fileId)) {
-      return reject(new Error('Invalid file ID format'));
-    }
     get(`https://drive.google.com/uc?export=download&id=${encodeURIComponent(fileId)}`);
   });
 }
 
+// Pre-resolve Google Drive URL
 app.get('/gdrive/resolve', async (req, res) => {
   const fileId = req.query.id;
   if (!fileId) return res.status(400).json({ error: 'Missing id' });
+
   try {
     const cached = gdriveCache.get(fileId);
     if (cached && cached.expiresAt > Date.now()) {
       return res.json({ ok: true, url: cached.url });
     }
+
     const result = await fetchGDriveConfirmedUrl(fileId);
     gdriveCache.set(fileId, { url: result.url, expiresAt: Date.now() + GDRIVE_CACHE_TTL });
     res.json({ ok: true, url: result.url });
@@ -352,24 +389,21 @@ app.get('/gdrive/resolve', async (req, res) => {
   }
 });
 
+// Stream video from Google Drive
 app.get('/gdrive', async (req, res) => {
   const fileId = req.query.id;
   if (!fileId) return res.status(400).json({ error: 'Missing id param' });
 
-  console.log('GDRIVE request:', { fileId, range: req.headers.range });
-
   try {
     let downloadUrl = null;
     const cached = gdriveCache.get(fileId);
+
     if (cached && cached.expiresAt > Date.now()) {
       downloadUrl = cached.url;
-      console.log('GDRIVE using cache:', fileId);
     } else {
-      console.log('GDRIVE resolving (uncached):', fileId);
       const result = await fetchGDriveConfirmedUrl(fileId);
       downloadUrl = result.url;
       gdriveCache.set(fileId, { url: downloadUrl, expiresAt: Date.now() + GDRIVE_CACHE_TTL });
-      console.log('GDRIVE cached:', fileId);
     }
 
     const streamFromGDrive = (url, redirects = 0) => {
@@ -381,7 +415,7 @@ app.get('/gdrive', async (req, res) => {
         if (!res.headersSent) return res.status(502).json({ error: 'Invalid redirect destination' });
         return;
       }
-      const parsed = new URL(url);
+
       const headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
         'Accept': 'video/mp4,video/webm,video/*,*/*',
@@ -389,23 +423,19 @@ app.get('/gdrive', async (req, res) => {
       if (req.headers.range) headers['Range'] = req.headers.range;
 
       https.get(url, { headers }, (resp) => {
-        // Follow redirects
-        if (resp.statusCode === 301 || resp.statusCode === 302 || resp.statusCode === 303) {
+        if ([301, 302, 303].includes(resp.statusCode)) {
           const next = resp.headers.location;
           resp.resume();
           return streamFromGDrive(next.startsWith('http') ? next : new URL(next, url).href, redirects + 1);
         }
 
         if (resp.statusCode !== 200 && resp.statusCode !== 206) {
-          if (!res.headersSent) {
-            return res.status(resp.statusCode).json({ error: `Google Drive returned ${resp.statusCode}` });
-          }
+          if (!res.headersSent) return res.status(resp.statusCode).json({ error: `Google Drive returned ${resp.statusCode}` });
           return;
         }
 
         const contentType = resp.headers['content-type'] || 'video/mp4';
         if (contentType.includes('text/html')) {
-          // Cache expired — re-resolve
           gdriveCache.delete(fileId);
           if (!res.headersSent) return res.status(502).json({ error: 'Session expired, retry in a moment' });
           return;
@@ -436,6 +466,7 @@ app.get('/gdrive', async (req, res) => {
   }
 });
 
+// Error handler
 app.use((err, req, res, next) => {
   console.error('Server error:', err.message);
   if (err instanceof multer.MulterError) {
@@ -444,24 +475,33 @@ app.use((err, req, res, next) => {
     }
     return res.status(400).json({ error: 'Upload error' });
   }
-  // SECURITY: Don't leak internal error details
   if (err) return res.status(500).json({ error: 'Internal server error' });
   next();
 });
 
+// ─────────────────────────────────────────────────────
+// Room state
+// ─────────────────────────────────────────────────────
+
 const rooms = new Map();
-const socketRooms = new Map();
+const socketRooms = new Map(); // socketId -> roomId
 
 function generateRoomCode() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   let code = '';
-  for (let i = 0; i < 6; i++) code += chars[Math.floor(Math.random() * chars.length)];
+  for (let i = 0; i < 6; i++) {
+    code += chars[Math.floor(Math.random() * chars.length)];
+  }
   return code;
 }
 
 function getRoom(roomId) {
   return rooms.get(roomId);
 }
+
+// ─────────────────────────────────────────────────────
+// Socket.IO event handlers
+// ─────────────────────────────────────────────────────
 
 io.on('connection', (socket) => {
   console.log('User connected:', socket.id, '| transport:', socket.conn.transport.name);
@@ -470,26 +510,22 @@ io.on('connection', (socket) => {
     return socketRooms.get(socket.id);
   }
 
-  // SECURITY: Socket rate limiter
-  function socketRateLimit(event, max = 30, window = 60000) {
+  function socketRateLimit(event, max = 30, window = 60_000) {
     return checkRateLimit(`${socket.id}:${event}`, max, window);
   }
 
-  // SECURITY: Input sanitization
   function sanitize(str, maxLen = 50) {
     if (typeof str !== 'string') return '';
     return str.replace(/[<>"'&]/g, '').trim().slice(0, maxLen);
   }
 
+  // ── Create room ──
   socket.on('create-room', ({ username, avatar }, callback) => {
-    console.log(`[DEBUG] create-room called by ${socket.id} from ${socket.handshake.address}`);
-    if (typeof callback !== 'function') return console.log('[DEBUG] create-room: no callback');
-    if (!socketRateLimit('create-room', 5, 60000)) {
+    if (typeof callback !== 'function') return;
+    if (!socketRateLimit('create-room', 5, 60_000)) {
       return callback({ error: 'Slow down! Try again in a minute.' });
     }
-
-    // SECURITY: Limit total rooms to prevent memory exhaustion
-    if (rooms.size >= 100) {
+    if (rooms.size >= MAX_ROOMS) {
       return callback({ error: 'Server is at capacity. Try again later.' });
     }
 
@@ -506,7 +542,7 @@ io.on('connection', (socket) => {
       playing: false,
       currentTime: 0,
       participants: [],
-      chat: []
+      chat: [],
     };
     rooms.set(roomId, room);
 
@@ -514,22 +550,17 @@ io.on('connection', (socket) => {
     socketRooms.set(socket.id, roomId);
     socket.data = { roomId, username, avatar };
 
-    room.participants.push({
-      id: socket.id,
-      username,
-      avatar,
-      isHost: true
-    });
+    room.participants.push({ id: socket.id, username, avatar, isHost: true });
 
     callback({ roomId, room });
     io.to(roomId).emit('room-updated', room);
     console.log(`Room ${roomId} created by ${username}`);
   });
 
+  // ── Join room ──
   socket.on('join-room', ({ roomId, username, avatar }, callback) => {
-    console.log(`[DEBUG] join-room called by ${socket.id} from ${socket.handshake.address} for room ${roomId}`);
-    if (typeof callback !== 'function') return console.log('[DEBUG] join-room: no callback');
-    if (!socketRateLimit('join-room', 10, 60000)) {
+    if (typeof callback !== 'function') return;
+    if (!socketRateLimit('join-room', 10, 60_000)) {
       return callback({ error: 'Slow down! Try again in a minute.' });
     }
 
@@ -540,18 +571,14 @@ io.on('connection', (socket) => {
     if (!roomId || roomId.length < 4) return callback({ error: 'Invalid room code' });
 
     const room = getRoom(roomId);
-    if (!room) {
-      return callback({ error: 'Room not found' });
-    }
-    if (room.participants.length >= 10) {
+    if (!room) return callback({ error: 'Room not found' });
+    if (room.participants.length >= MAX_PARTICIPANTS_PER_ROOM) {
       return callback({ error: 'Room is full (max 10)' });
     }
 
-    // SECURITY: Clean up stale entries from same username (reconnect scenario)
+    // Clean up stale entries from same username (reconnect scenario)
     const staleIdx = room.participants.findIndex(p => p.username === username && p.id !== socket.id);
-    if (staleIdx !== -1) {
-      room.participants.splice(staleIdx, 1);
-    }
+    if (staleIdx !== -1) room.participants.splice(staleIdx, 1);
 
     // Don't add duplicate if same socket somehow joins twice
     if (room.participants.some(p => p.id === socket.id)) {
@@ -562,12 +589,7 @@ io.on('connection', (socket) => {
     socketRooms.set(socket.id, roomId);
     socket.data = { roomId, username, avatar };
 
-    room.participants.push({
-      id: socket.id,
-      username,
-      avatar,
-      isHost: false
-    });
+    room.participants.push({ id: socket.id, username, avatar, isHost: false });
 
     callback({ roomId, room });
     io.to(roomId).emit('room-updated', room);
@@ -575,7 +597,7 @@ io.on('connection', (socket) => {
       username: 'System',
       avatar: '🎬',
       message: `${username} joined the party!`,
-      timestamp: Date.now()
+      timestamp: Date.now(),
     });
 
     // Sync new user to current playback state
@@ -588,11 +610,12 @@ io.on('connection', (socket) => {
     console.log(`${username} joined room ${roomId}`);
   });
 
+  // ── Set video ──
   socket.on('set-video', ({ videoUrl, videoType }) => {
-    if (!socketRateLimit('set-video', 10, 60000)) {
+    if (!socketRateLimit('set-video', 10, 60_000)) {
       return socket.emit('chat-message', {
         username: 'System', avatar: '⚠️',
-        message: 'Video change rate limited.', timestamp: Date.now()
+        message: 'Video change rate limited.', timestamp: Date.now(),
       });
     }
 
@@ -600,13 +623,13 @@ io.on('connection', (socket) => {
     const room = getRoom(roomId);
     if (!room || room.host !== socket.id) return;
 
-    // SECURITY: Validate video URL
+    // Validate video URL by type
     if (videoType === 'gdrive') {
       const fileId = extractGDriveFileId(videoUrl);
       if (!fileId || !/^[a-zA-Z0-9_-]+$/.test(fileId)) {
         return socket.emit('chat-message', {
           username: 'System', avatar: '⚠️',
-          message: 'Invalid Google Drive link.', timestamp: Date.now()
+          message: 'Invalid Google Drive link.', timestamp: Date.now(),
         });
       }
       videoUrl = `/gdrive?id=${fileId}`;
@@ -615,22 +638,21 @@ io.on('connection', (socket) => {
       if (!videoId) {
         return socket.emit('chat-message', {
           username: 'System', avatar: '⚠️',
-          message: 'Invalid YouTube link.', timestamp: Date.now()
+          message: 'Invalid YouTube link.', timestamp: Date.now(),
         });
       }
     } else if (videoUrl && !videoUrl.startsWith('/uploads/')) {
-      // URL type — validate via proxy check
       let parsed;
       try { parsed = new URL(videoUrl); } catch {
         return socket.emit('chat-message', {
           username: 'System', avatar: '⚠️',
-          message: 'Invalid video URL.', timestamp: Date.now()
+          message: 'Invalid video URL.', timestamp: Date.now(),
         });
       }
       if (parsed.protocol !== 'https:' || !PROXY_ALLOWED_HOSTS.some(h => parsed.hostname === h || parsed.hostname.endsWith('.' + h))) {
         return socket.emit('chat-message', {
           username: 'System', avatar: '⚠️',
-          message: 'URL not allowed.', timestamp: Date.now()
+          message: 'URL not allowed.', timestamp: Date.now(),
         });
       }
     }
@@ -644,6 +666,7 @@ io.on('connection', (socket) => {
     io.to(room.id).emit('room-updated', room);
   });
 
+  // ── Playback controls ──
   socket.on('play', () => {
     const room = getRoom(getSocketRoomId());
     if (!room) return;
@@ -672,20 +695,19 @@ io.on('connection', (socket) => {
     room.currentTime = currentTime;
   });
 
-  // Periodic drift correction — host broadcasts current time every 5s
+  // Drift correction — host broadcasts current time every 5s
   const driftInterval = setInterval(() => {
     const room = getRoom(getSocketRoomId());
     if (!room || room.host !== socket.id || !room.playing) return;
     io.to(room.id).emit('sync-time', { currentTime: room.currentTime });
   }, 5000);
 
-  // ===== WEBRTC VIDEO CALL SIGNALING =====
+  // ── WebRTC signaling ──
   socket.on('call-join', () => {
     const roomId = getSocketRoomId();
     if (!roomId) return;
     const room = getRoom(roomId);
     if (!room) return;
-    // Notify others that this user started their camera
     socket.to(roomId).emit('call-user-joined', { socketId: socket.id, username: socket.data?.username });
   });
 
@@ -707,18 +729,18 @@ io.on('connection', (socket) => {
     socket.to(roomId).emit('call-user-left', { socketId: socket.id });
   });
 
+  // ── Chat ──
   socket.on('chat-message', ({ message }) => {
-    if (!socketRateLimit('chat', 20, 30000)) {
+    if (!socketRateLimit('chat', 20, 30_000)) {
       return socket.emit('chat-message', {
         username: 'System', avatar: '⚠️',
-        message: 'Slow down! Chat rate limit.', timestamp: Date.now()
+        message: 'Slow down! Chat rate limit.', timestamp: Date.now(),
       });
     }
 
     const room = getRoom(getSocketRoomId());
     if (!room) return;
 
-    // SECURITY: Validate and sanitize message
     message = sanitize(message, 500);
     if (!message) return;
 
@@ -726,14 +748,15 @@ io.on('connection', (socket) => {
       username: socket.data?.username || 'Anonymous',
       avatar: socket.data?.avatar || '🍿',
       message,
-      timestamp: Date.now()
+      timestamp: Date.now(),
     };
     room.chat.push(chatMsg);
-    if (room.chat.length > 200) room.chat.shift();
+    if (room.chat.length > CHAT_HISTORY_LIMIT) room.chat.shift();
 
     io.to(room.id).emit('chat-message', chatMsg);
   });
 
+  // ── Disconnect ──
   socket.on('disconnect', () => {
     clearInterval(driftInterval);
     const roomId = getSocketRoomId();
@@ -742,43 +765,52 @@ io.on('connection', (socket) => {
     if (!room) return;
 
     const idx = room.participants.findIndex(p => p.id === socket.id);
-    if (idx !== -1) {
-      const user = room.participants[idx];
-      room.participants.splice(idx, 1);
+    if (idx === -1) return;
 
-      io.to(room.id).emit('chat-message', {
-        username: 'System',
-        avatar: '🎬',
-        message: `${user.username} left the party`,
-        timestamp: Date.now()
-      });
+    const user = room.participants[idx];
+    room.participants.splice(idx, 1);
 
-      if (room.participants.length === 0) {
-        rooms.delete(room.id);
-        console.log(`Room ${room.id} deleted (empty)`);
-        return;
-      }
+    io.to(room.id).emit('chat-message', {
+      username: 'System',
+      avatar: '🎬',
+      message: `${user.username} left the party`,
+      timestamp: Date.now(),
+    });
 
-      if (room.host === socket.id) {
-        room.host = room.participants[0].id;
-        room.participants[0].isHost = true;
-        io.to(room.id).emit('new-host', { hostId: room.host, username: room.participants[0].username });
-      }
-
-      io.to(room.id).emit('room-updated', room);
+    if (room.participants.length === 0) {
+      rooms.delete(room.id);
+      console.log(`Room ${room.id} deleted (empty)`);
+      return;
     }
+
+    // Transfer host if needed
+    if (room.host === socket.id) {
+      room.host = room.participants[0].id;
+      room.participants[0].isHost = true;
+      io.to(room.id).emit('new-host', {
+        hostId: room.host,
+        username: room.participants[0].username,
+      });
+    }
+
+    io.to(room.id).emit('room-updated', room);
     console.log('User disconnected:', socket.id);
   });
 });
+
+// ─────────────────────────────────────────────────────
+// Start server
+// ─────────────────────────────────────────────────────
 
 const isHttps = fs.existsSync(keyFile) && fs.existsSync(certFile);
 const protocol = isHttps ? 'https' : 'http';
 
 server.listen(PORT, '0.0.0.0', () => {
-  console.log(`Movie Night server running:`);
+  console.log(`\n  🎬 Movie Night server running:`);
   console.log(`  Local:    ${protocol}://localhost:${PORT}`);
   console.log(`  Network:  ${protocol}://${lanIp}:${PORT}`);
   if (isHttps) {
     console.log(`  (Browser may warn about self-signed cert — click Advanced > Proceed)`);
   }
+  console.log();
 });
